@@ -5,6 +5,7 @@ on:
     types: [assigned]
   pull_request:
     types: [review_requested]
+  workflow_dispatch:  # Allow manual triggering for testing
 
 env:
   ANTHROPIC_BASE_URL: ${{ secrets.CUSTOM_ANTHROPIC_BASE_URL }}
@@ -17,12 +18,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
-    # Prevent self-triggering
+    # Prevent self-triggering, but allow manual runs for testing
     if: |
-      github.actor != 'claude[bot]' && (
+      github.event_name == 'workflow_dispatch' ||
+      (github.actor != 'claude[bot]' && (
         (github.event.issue && github.event.issue.assignee.login == 'enacton-ai') ||
         (github.event.pull_request && contains(github.event.pull_request.requested_reviewers.*.login, 'enacton-ai'))
-      )
+      ))
 
     permissions:
       contents: write
@@ -84,16 +86,23 @@ jobs:
           fi
 
       - name: Process Issue (Implementation)
-        if: github.event_name == 'issues'
+        if: github.event_name == 'issues' || github.event_name == 'workflow_dispatch'
         run: |
-          ISSUE_NUMBER="${{ github.event.issue.number }}"
-          ISSUE_TITLE="${{ github.event.issue.title }}"
-          ISSUE_BODY="${{ github.event.issue.body }}"
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            ISSUE_NUMBER="0"
+            ISSUE_TITLE="Manual Workflow Test"
+            ISSUE_BODY="Manual test run from Actions tab"
+          else
+            ISSUE_NUMBER="${{ github.event.issue.number }}"
+            ISSUE_TITLE="${{ github.event.issue.title }}"
+            ISSUE_BODY="${{ github.event.issue.body }}"
+          fi
 
           echo "=========================================="
           echo "Processing Issue: #$ISSUE_NUMBER"
           echo "Title: $ISSUE_TITLE"
           echo "Stack: ${{ steps.detect-stack.outputs.stack }}"
+          echo "Event: ${{ github.event_name }}"
           echo "=========================================="
 
           # Note: This is a placeholder for actual AI implementation
@@ -128,7 +137,7 @@ jobs:
           # For now, this posts a placeholder comment
 
       - name: Post comment on issue
-        if: github.event_name == 'issues'
+        if: github.event_name == 'issues' && success()
         run: |
           COMMENT="## 🤖 AI Agent Acknowledgment
 
@@ -182,7 +191,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Unassign AI agent (if issue)
-        if: github.event_name == 'issues' && success()
+        if: github.event_name == 'issues' && success() && github.event.issue.assignee.login == 'enacton-ai'
         run: |
           echo "Removing AI agent assignment..."
           gh issue edit "${{ github.event.issue.number }}" --remove-assignee "enacton-ai"
