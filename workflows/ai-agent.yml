@@ -15,7 +15,7 @@ if: |
 
 env:
   ANTHROPIC_BASE_URL: ${{ secrets.CUSTOM_ANTHROPIC_BASE_URL }}
-  ANTHROPIC_AUTH_TOKEN: ${{ secrets.CUSTOM_ANTHROPIC_TOKEN }}
+  ANTHROPIC_API_KEY: ${{ secrets.CUSTOM_ANTHROPIC_TOKEN }}
   CLAUDE_CODE_CONFIG_DIR: ${{ github.workspace }}/.claude-agents
 
 jobs:
@@ -45,25 +45,25 @@ jobs:
           # Check for Laravel
           if [ -f "composer.json" ]; then
             STACK="$STACK,laravel"
-            echo "Detected: Laravel"
+            echo "✓ Detected: Laravel"
           fi
 
           # Check for Next.js
           if [ -f "next.config.js" ] || [ -f "next.config.mjs" ] || [ -f "next.config.ts" ]; then
             STACK="$STACK,nextjs"
-            echo "Detected: Next.js"
+            echo "✓ Detected: Next.js"
           fi
 
           # Check for React Native
           if [ -d "android" ] || [ -d "ios" ]; then
             STACK="$STACK,reactnative"
-            echo "Detected: React Native"
+            echo "✓ Detected: React Native"
           fi
 
           # Check for Expo
           if [ -f "app.json" ] && grep -q "expo" app.json 2>/dev/null; then
             STACK="$STACK,expo"
-            echo "Detected: Expo"
+            echo "✓ Detected: Expo"
           fi
 
           # Remove leading comma and save to output
@@ -71,173 +71,120 @@ jobs:
           echo "stack=$STACK" >> $GITHUB_OUTPUT
           echo "Final stack: $STACK"
 
-      - name: Setup Claude Code
+      - name: Verify agents exist
         run: |
-          # Install Claude Code (if not already installed)
-          if ! command -v claude &> /dev/null; then
-            echo "Installing Claude Code..."
-            npm install -g @anthropic-ai/claude-code
+          echo "Checking for AI agents..."
+          if [ -d "$CLAUDE_CODE_CONFIG_DIR/agents" ]; then
+            echo "✓ Agents directory found"
+            echo "Available agents:"
+            find "$CLAUDE_CODE_CONFIG_DIR/agents" -name "*.json" -exec basename {} \; | sed 's/.json$//'
+          else
+            echo "✗ No agents found! Please run: curl -sSL https://raw.githubusercontent.com/enact-on/ai-agent-config/main/scripts/install.sh | bash"
+            exit 1
           fi
 
-          # Verify installation
-          claude --version
-
-      - name: Configure AI agents
-        run: |
-          # Create config directory if it doesn't exist
-          mkdir -p "$CLAUDE_CODE_CONFIG_DIR"/agents
-
-          # Copy common agents
-          echo "Copying common agents..."
-          # Agents should be pre-installed in .claude-agents directory
-
-          # Verify agents exist
-          ls -la "$CLAUDE_CODE_CONFIG_DIR/agents" || echo "No agents found"
-
-          # List available agents
-          echo "Available agents:"
-          find "$CLAUDE_CODE_CONFIG_DIR/agents" -name "*.json" -exec basename {} \; | sed 's/.json$//'
-
-      - name: Process Issue
+      - name: Process Issue (Implementation)
         if: github.event_name == 'issues'
         run: |
           ISSUE_NUMBER="${{ github.event.issue.number }}"
           ISSUE_TITLE="${{ github.event.issue.title }}"
           ISSUE_BODY="${{ github.event.issue.body }}"
-          ISSUE_AUTHOR="${{ github.event.issue.user.login }}"
 
-          echo "Processing issue #$ISSUE_NUMBER"
+          echo "=========================================="
+          echo "Processing Issue: #$ISSUE_NUMBER"
           echo "Title: $ISSUE_TITLE"
-          echo "Author: $ISSUE_AUTHOR"
-          echo "Tech stack: ${{ steps.detect-stack.outputs.stack }}"
+          echo "Stack: ${{ steps.detect-stack.outputs.stack }}"
+          echo "=========================================="
 
-          # Run Claude Code agent
-          claude agent \
-            --config "$CLAUDE_CODE_CONFIG_DIR" \
-            --task "Issue #$ISSUE_NUMBER: $ISSUE_TITLE" \
-            --context "$ISSUE_BODY" \
-            --stack "${{ steps.detect-stack.outputs.stack }}" \
-            --output-format pr
+          # Note: This is a placeholder for actual AI implementation
+          # The actual implementation would call the Anthropic API here
+          # For now, this creates a comment to acknowledge the issue
 
-      - name: Process Pull Request Review
+          echo "AI Agent would process this issue."
+          echo "This requires Anthropic API integration."
+
+      - name: Process Pull Request (Review)
         if: github.event_name == 'pull_request'
         run: |
           PR_NUMBER="${{ github.event.pull_request.number }}"
           PR_TITLE="${{ github.event.pull_request.title }}"
-          PR_BODY="${{ github.event.pull_request.body }}"
-          PR_AUTHOR="${{ github.event.pull_request.user.login }}"
-          PR_DIFF_URL="${{ github.event.pull_request.diff_url }}"
 
-          echo "Processing PR review for #$PR_NUMBER"
+          echo "=========================================="
+          echo "Reviewing PR: #$PR_NUMBER"
           echo "Title: $PR_TITLE"
-          echo "Author: $PR_AUTHOR"
-          echo "Tech stack: ${{ steps.detect-stack.outputs.stack }}"
+          echo "Stack: ${{ steps.detect-stack.outputs.stack }}"
+          echo "=========================================="
 
-          # Fetch PR diff
-          echo "Fetching PR diff..."
-          PR_DIFF=$(curl -s -H "Accept: application/vnd.github.v3.diff" \
-            "$PR_DIFF_URL")
+          # Get PR diff
+          echo "Fetching PR changes..."
+          git fetch origin main
+          git diff origin/main...HEAD > /tmp/pr.diff
 
-          # Run Claude Code agent for review
-          claude agent \
-            --config "$CLAUDE_CODE_CONFIG_DIR" \
-            --task "PR Review #$PR_NUMBER: $PR_TITLE" \
-            --context "$PR_BODY" \
-            --diff "$PR_DIFF" \
-            --stack "${{ steps.detect-stack.outputs.stack }}" \
-            --agent code-reviewer \
-            --output-format review
+          echo "Files changed:"
+          git diff --name-only origin/main...HEAD
 
-      - name: Create PR (if implementation changes made)
+          # Note: This is a placeholder for actual AI review
+          # The actual implementation would call the Anthropic API here
+          # For now, this posts a placeholder comment
+
+      - name: Post comment on issue
         if: github.event_name == 'issues'
         run: |
-          # Check if Claude created any changes
-          if git diff --quiet && git diff --cached --quiet; then
-            echo "No changes detected, skipping PR creation"
-          else
-            # Create a new branch for the changes
-            BRANCH_NAME="ai-agent/issue-${{ github.event.issue.number }}"
-            git config --global user.name "super-ai-agent"
-            git config --global user.email "noreply@github.com"
-            git checkout -b "$BRANCH_NAME"
-            git add .
-            git commit -m "AI Agent: Implementation for issue #${{ github.event.issue.number }}"
-            git push origin "$BRANCH_NAME"
+          COMMENT="## 🤖 AI Agent Acknowledgment
 
-            # Create PR using GitHub CLI
-            gh pr create \
-              --base main \
-              --head "$BRANCH_NAME" \
-              --title "AI Implementation: ${{ github.event.issue.title }}" \
-              --body "Automated implementation by AI agent for issue #${{ github.event.issue.number }}
+          **Issue:** #${{ github.event.issue.number }} - ${{ github.event.issue.title }}
+          **Tech Stack:** ${{ steps.detect-stack.outputs.stack }}
 
-            This PR was created by the super-ai-agent in response to being assigned to issue #${{ github.event.issue.number }}.
+          ### What Happens Next:
+          1. ✅ Tech stack detected: `${{ steps.detect-stack.outputs.stack }}`
+          2. ✅ AI agents loaded from: `.claude-agents/`
+          3. ⏳ **Note:** Full AI implementation requires Anthropic API integration
 
-            **Original Issue:**
-            ${{ github.event.issue.body }}
+          ### Setup Required:
+          - Ensure `CUSTOM_ANTHROPIC_BASE_URL` is set in repository secrets
+          - Ensure `CUSTOM_ANTHROPIC_TOKEN` is set in repository secrets
+          - The actual AI processing logic will be implemented in the next phase
 
-            **Tech Stack:** ${{ steps.detect-stack.outputs.stack }}
+          ---
+          *Processed by: super-ai-agent*"
 
-            ---
-            *This is an automated PR. Please review all changes before merging.*"
-          fi
+          gh issue comment "${{ github.event.issue.number }}" --body "$COMMENT"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Add comment to issue/PR
-        if: always()
+      - name: Post comment on PR
+        if: github.event_name == 'pull_request'
         run: |
-          if [ "${{ github.event_name }}" == "issues" ]; then
-            COMMENT="AI agent has processed this issue.
+          COMMENT="## 🤖 AI Agent Review
 
-            **Tech Stack Detected:** ${{ steps.detect-stack.outputs.stack }}
-            **Agent Used:** team-lead-orchestrator + tech-specific agents
+          **PR:** #${{ github.event.pull_request.number }} - ${{ github.event.pull_request.title }}
+          **Tech Stack:** ${{ steps.detect-stack.outputs.stack }}
 
-            ${
-              if [ "${{ job.status }}" == "success" ]; then
-                echo "Status: ✅ Completed";
-                if [ -n "$(git status --porcelain)" ]; then
-                  echo "";
-                  echo "A PR has been created with the implementation changes.";
-                else
-                  echo "";
-                  echo "No code changes were needed for this issue.";
-                fi
-              else
-                echo "Status: ❌ Failed - Please check the workflow logs for details";
-              fi
-            }
+          ### Files Changed:
+          \`\`\`
+          $(git diff --name-only origin/main...HEAD | head -20)
+          \`\`\`
 
-            ---
-            *Processed by super-ai-agent*";
+          ### What Happens Next:
+          1. ✅ Tech stack detected
+          2. ✅ PR changes analyzed
+          3. ⏳ **Note:** Full AI review requires Anthropic API integration
 
-            gh issue comment "${{ github.event.issue.number }}" --body "$COMMENT";
-          else
-            COMMENT="AI agent review completed.
+          ### Setup Required:
+          - Ensure secrets are configured
+          - AI will review code quality, security, and best practices
 
-            **Tech Stack Detected:** ${{ steps.detect-stack.outputs.stack }}
-            **Agent Used:** code-reviewer
+          ---
+          *Reviewed by: super-ai-agent*"
 
-            ${
-              if [ "${{ job.status }}" == "success" ]; then
-                echo "Status: ✅ Review Complete";
-              else
-                echo "Status: ❌ Review Failed";
-              fi
-            }
-
-            ---
-            *Reviewed by super-ai-agent*";
-
-            gh pr comment "${{ github.event.pull_request.number }}" --body "$COMMENT";
-          fi
+          gh pr comment "${{ github.event.pull_request.number }}" --body "$COMMENT"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Unassign AI agent (if completed)
+      - name: Unassign AI agent (if issue)
         if: github.event_name == 'issues' && success()
         run: |
-          # Remove assignment from AI agent
+          echo "Removing AI agent assignment..."
           gh issue edit "${{ github.event.issue.number }}" --remove-assignee "super-ai-agent"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
