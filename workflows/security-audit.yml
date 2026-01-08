@@ -167,7 +167,7 @@ jobs:
             --title "$ISSUE_TITLE" \
             --body "$(cat security-final.md)" \
             --label "security" \
-            --assignee "super-ai-agent"
+            --assignee "enacton-ai"
 
           echo "Security audit issue created: $ISSUE_TITLE"
         env:

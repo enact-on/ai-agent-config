@@ -20,8 +20,8 @@ jobs:
     # Prevent self-triggering
     if: |
       github.actor != 'claude[bot]' && (
-        (github.event.issue && github.event.issue.assignee.login == 'super-ai-agent') ||
-        (github.event.pull_request && contains(github.event.pull_request.requested_reviewers.*.login, 'super-ai-agent'))
+        (github.event.issue && github.event.issue.assignee.login == 'enacton-ai') ||
+        (github.event.pull_request && contains(github.event.pull_request.requested_reviewers.*.login, 'enacton-ai'))
       )
 
     permissions:
@@ -146,7 +146,7 @@ jobs:
           - The actual AI processing logic will be implemented in the next phase
 
           ---
-          *Processed by: super-ai-agent*"
+          *Processed by: enacton-ai*"
 
           gh issue comment "${{ github.event.issue.number }}" --body "$COMMENT"
         env:
@@ -175,7 +175,7 @@ jobs:
           - AI will review code quality, security, and best practices
 
           ---
-          *Reviewed by: super-ai-agent*"
+          *Reviewed by: enacton-ai*"
 
           gh pr comment "${{ github.event.pull_request.number }}" --body "$COMMENT"
         env:
@@ -185,6 +185,6 @@ jobs:
         if: github.event_name == 'issues' && success()
         run: |
           echo "Removing AI agent assignment..."
-          gh issue edit "${{ github.event.issue.number }}" --remove-assignee "super-ai-agent"
+          gh issue edit "${{ github.event.issue.number }}" --remove-assignee "enacton-ai"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

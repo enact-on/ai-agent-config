@@ -4,7 +4,7 @@
 
 ## Overview
 
-This repository contains AI agent definitions, workflows, and installation scripts for deploying Claude Code AI agents across multiple GitHub repositories. Teams can assign issues or PRs to `@super-ai-agent` to trigger automated code review, implementation, and security analysis.
+This repository contains AI agent definitions, workflows, and installation scripts for deploying Claude Code AI agents across multiple GitHub repositories. Teams can assign issues or PRs to `@enacton-ai` to trigger automated code review, implementation, and security analysis.
 
 ## Features
 
@@ -58,7 +58,7 @@ Add the following secrets to your repository (Settings → Secrets and variables
 
 ### 3. Create Bot Account (Optional)
 
-1. Create a GitHub bot account: `super-ai-agent`
+1. Create a GitHub bot account: `enacton-ai`
 2. Grant it read access to your repositories
 3. Use this account as the assignee for AI-triggered tasks
 
@@ -66,12 +66,12 @@ Add the following secrets to your repository (Settings → Secrets and variables
 
 **For Implementation:**
 1. Create a GitHub issue describing the task
-2. Assign the issue to `@super-ai-agent`
+2. Assign the issue to `@enacton-ai`
 3. The AI will analyze, plan, and create a PR with the implementation
 
 **For Code Review:**
 1. Create a pull request
-2. Request review from `@super-ai-agent`
+2. Request review from `@enacton-ai`
 3. The AI will analyze the changes and provide review comments
 
 ## Repository Structure
@@ -134,7 +134,7 @@ ai-agent-config/
 gh issue create \
   --title "Add user authentication with OAuth2" \
   --body "Implement OAuth2 login with Google and GitHub providers" \
-  --assignee "super-ai-agent"
+  --assignee "enacton-ai"
 ```
 
 The AI will:
@@ -151,7 +151,7 @@ The AI will:
 gh pr create \
   --title "Refactor user service" \
   --body "Improved the user service architecture" \
-  --reviewer "super-ai-agent"
+  --reviewer "enacton-ai"
 ```
 
 The AI will:
@@ -192,8 +192,8 @@ When the central configuration repository is updated:
 ### AI Agent Workflow (`.github/workflows/ai-agent.yml`)
 
 **Triggers:**
-- Issue assigned to `@super-ai-agent`
-- PR review requested from `@super-ai-agent`
+- Issue assigned to `@enacton-ai`
+- PR review requested from `@enacton-ai`
 
 **Behavior:**
 - Detects project tech stack
@@ -315,7 +315,7 @@ bash install.sh
 1. Verify GitHub secrets are configured
 2. Check GitHub Actions logs for errors
 3. Ensure bot account has repository access
-4. Verify issue/PR is assigned to `@super-ai-agent`
+4. Verify issue/PR is assigned to `@enacton-ai`
 
 ### Wrong Agents Selected
 
