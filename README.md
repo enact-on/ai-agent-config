@@ -8,12 +8,12 @@ This repository contains AI agent definitions, workflows, and installation scrip
 
 ## Features
 
-- **🤖 Automated AI Agents**: Specialized agents for different tech stacks and tasks
-- **🔧 Simple Installation**: One-command setup with automatic tech stack detection
-- **🎯 Tech Stack Specific**: Agents tailored for Laravel, Next.js, Node.js, React Native, and Expo
-- **🔒 Security Audits**: Automated weekly security vulnerability scanning
-- **📈 Scalable**: Manages 100+ repositories from a single configuration source
-- **🔄 Easy Updates**: Single command to update all agents across all repositories
+- **Automated AI Agents**: Specialized agents for different tech stacks and tasks
+- **Simple Installation**: One-command setup with automatic tech stack detection
+- **Tech Stack Specific**: Agents tailored for Laravel, Next.js, Node.js, React Native, and Expo
+- **Security Audits**: Automated weekly security vulnerability scanning
+- **Scalable**: Manages 100+ repositories from a single configuration source
+- **Easy Updates**: Single command to update all agents across all repositories
 
 ## Architecture
 
@@ -356,14 +356,13 @@ To contribute to this configuration repository:
 
 ## License
 
-[Your License Here]
+MIT License
 
 ## Support
 
 For issues or questions:
-- GitHub Issues: [repository-url]/issues
-- Documentation: [docs-url]
-- Team Slack: #ai-agents
+- GitHub Issues: https://github.com/enact-on/ai-agent-config/issues
+- Documentation: https://github.com/enact-on/ai-agent-config
 
 ## Changelog
 
@@ -378,7 +377,6 @@ For issues or questions:
 
 ---
 
-**Made with ❤️ by the development team**
+Made with love by the development team
 
-*Automating development assistance across all repositories.*
- 
+Automating development assistance across all repositories.
