@@ -1,0 +1,224 @@
+name: Security Audit
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Every Sunday at midnight UTC
+
+  workflow_dispatch:  # Manual trigger
+
+permissions:
+  contents: read
+  issues: write
+  security-events: write
+
+env:
+  ANTHROPIC_BASE_URL: ${{ secrets.CUSTOM_ANTHROPIC_BASE_URL }}
+  ANTHROPIC_AUTH_TOKEN: ${{ secrets.CUSTOM_ANTHROPIC_TOKEN }}
+  CLAUDE_CODE_CONFIG_DIR: ${{ github.workspace }}/.claude-agents
+
+jobs:
+  security-audit:
+    name: Weekly Security Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Claude Code
+        run: |
+          # Install Claude Code (if not already installed)
+          if ! command -v claude &> /dev/null; then
+            echo "Installing Claude Code..."
+            npm install -g @anthropic-ai/claude-code
+          fi
+
+          # Verify installation
+          claude --version
+
+      - name: Run dependency audit
+        run: |
+          echo "=== Dependency Vulnerability Scan ===" > security-report.md
+          echo "" >> security-report.md
+
+          # PHP/Laravel dependencies
+          if [ -f "composer.json" ]; then
+            echo "## Composer (PHP) Dependencies" >> security-report.md
+            echo '```' >> security-report.md
+            composer audit --no-dev || true
+            echo '```' >> security-report.md
+            echo "" >> security-report.md
+          fi
+
+          # Node.js dependencies
+          if [ -f "package.json" ]; then
+            echo "## npm Dependencies" >> security-report.md
+            echo '```' >> security-report.md
+            npm audit --json || true
+            echo '```' >> security-report.md
+            echo "" >> security-report.md
+          fi
+
+      - name: Run secret scan
+        run: |
+          echo "## Secret Scan Results" >> security-report.md
+          echo "" >> security-report.md
+
+          # Scan for potential secrets (basic patterns)
+          echo "Scanning for potential secrets..." >> security-report.md
+
+          # Common secret patterns
+          PATTERNS=(
+            "password.*=.*['\"][^'\"]+['\"]"
+            "api_key.*=.*['\"][^'\"]+['\"]"
+            "secret.*=.*['\"][^'\"]+['\"]"
+            "token.*=.*['\"][^'\"]+['\"]"
+            "AWS_ACCESS_KEY_ID"
+            "AWS_SECRET_ACCESS_KEY"
+            "PRIVATE KEY"
+            "BEGIN.*PRIVATE.*KEY"
+          )
+
+          FOUND=0
+          for pattern in "${PATTERNS[@]}"; do
+            MATCHES=$(grep -r -i -E "$pattern" --include="*.php" --include="*.js" --include="*.ts" --include="*.tsx" --include="*.env*" --exclude-dir=node_modules --exclude-dir=vendor --exclude-dir=.claude-agents . 2>/dev/null || true)
+
+            if [ -n "$MATCHES" ]; then
+              echo "### Pattern: \`$pattern\`" >> security-report.md
+              echo '```' >> security-report.md
+              echo "$MATCHES" | head -20 >> security-report.md
+              echo '```' >> security-report.md
+              echo "" >> security-report.md
+              FOUND=1
+            fi
+          done
+
+          if [ $FOUND -eq 0 ]; then
+            echo "✅ No secrets detected" >> security-report.md
+          fi
+
+          echo "" >> security-report.md
+
+      - name: Run AI security analysis
+        run: |
+          echo "## AI Security Analysis" >> security-report.md
+          echo "" >> security-report.md
+
+          # Detect tech stack
+          STACK=""
+          if [ -f "composer.json" ]; then STACK="$STACK,laravel"; fi
+          if [ -f "next.config.js" ] || [ -f "next.config.mjs" ] || [ -f "next.config.ts" ]; then STACK="$STACK,nextjs"; fi
+          if [ -d "android" ] || [ -d "ios" ]; then STACK="$STACK,reactnative"; fi
+          if [ -f "app.json" ] && grep -q "expo" app.json 2>/dev/null; then STACK="$STACK,expo"; fi
+          STACK="${STACK#,}"
+
+          echo "Running AI security auditor..." >> security-report.md
+          echo "Tech Stack: $STACK" >> security-report.md
+
+          # Run Claude Code security auditor
+          claude agent \
+            --config "$CLAUDE_CODE_CONFIG_DIR" \
+            --task "Comprehensive security audit" \
+            --agent security-auditor \
+            --stack "$STACK" \
+            --output markdown >> security-report.md 2>&1 || true
+
+      - name: Generate summary
+        run: |
+          echo "# Security Audit Summary" > security-summary.md
+          echo "" >> security-summary.md
+          echo "**Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> security-summary.md
+          echo "**Repository:** ${{ github.repository }}" >> security-summary.md
+          echo "**Commit:** ${{ github.sha }}" >> security-summary.md
+          echo "" >> security-summary.md
+
+          # Count issues
+          CRITICAL=$(grep -c "🔴 CRITICAL" security-report.md 2>/dev/null || echo 0)
+          HIGH=$(grep -c "🟠 HIGH" security-report.md 2>/dev/null || echo 0)
+          MEDIUM=$(grep -c "🟡 MEDIUM" security-report.md 2>/dev/null || echo 0)
+          LOW=$(grep -c "🔵 INFO" security-report.md 2>/dev/null || echo 0)
+
+          echo "## Findings Overview" >> security-summary.md
+          echo "" >> security-summary.md
+          echo "| Severity | Count |" >> security-summary.md
+          echo "|----------|-------|" >> security-summary.md
+          echo "| 🔴 Critical | $CRITICAL |" >> security-summary.md
+          echo "| 🟠 High | $HIGH |" >> security-summary.md
+          echo "| 🟡 Medium | $MEDIUM |" >> security-summary.md
+          echo "| 🔵 Low/Info | $LOW |" >> security-summary.md
+          echo "" >> security-summary.md
+
+      - name: Create security audit issue
+        run: |
+          ISSUE_TITLE="Weekly Security Audit - $(date -u +"%Y-%m-%d")"
+
+          # Combine summary and full report
+          cat security-summary.md > security-final.md
+          echo "" >> security-final.md
+          echo "---" >> security-final.md
+          echo "" >> security-final.md
+          cat security-report.md >> security-final.md
+
+          # Create issue
+          gh issue create \
+            --title "$ISSUE_TITLE" \
+            --body "$(cat security-final.md)" \
+            --label "security" \
+            --assignee "super-ai-agent"
+
+          echo "Security audit issue created: $ISSUE_TITLE"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload security report
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: |
+            security-report.md
+            security-summary.md
+
+      - name: Comment on any critical findings
+        if: contains(steps.security-audit.outputs.report, '🔴 CRITICAL')
+        run: |
+          # Extract critical issues
+          CRITICAL_ISSUES=$(grep -A 10 "🔴 CRITICAL" security-report.md || true)
+
+          if [ -n "$CRITICAL_ISSUES" ]; then
+            COMMENT="🚨 **Critical Security Issues Detected**
+
+            The automated security audit found critical vulnerabilities that require immediate attention:
+
+            $CRITICAL_ISSUES
+
+            Please review the full security audit issue for details and remediation steps."
+
+            # Find and comment on any open security issues
+            for ISSUE in $(gh issue list --label security --state open --json number --jq '.[].number'); do
+              gh issue comment "$ISSUE" --body "$COMMENT"
+            done
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  generate-sarif:
+    name: Generate SARIF Report
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          languages: javascript, php
+          category: "/language:${{matrix.language}}"
