@@ -6,13 +6,6 @@ on:
   pull_request:
     types: [review_requested]
 
-# Prevent self-triggering
-if: |
-  github.actor != 'claude[bot]' && (
-    (github.event.issue && github.event.issue.assignee.login == 'super-ai-agent') ||
-    (github.event.pull_request && contains(github.event.pull_request.requested_reviewers.*.login, 'super-ai-agent'))
-  )
-
 env:
   ANTHROPIC_BASE_URL: ${{ secrets.CUSTOM_ANTHROPIC_BASE_URL }}
   ANTHROPIC_API_KEY: ${{ secrets.CUSTOM_ANTHROPIC_TOKEN }}
@@ -23,6 +16,13 @@ jobs:
     name: AI Agent Task Handler
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
+    # Prevent self-triggering
+    if: |
+      github.actor != 'claude[bot]' && (
+        (github.event.issue && github.event.issue.assignee.login == 'super-ai-agent') ||
+        (github.event.pull_request && contains(github.event.pull_request.requested_reviewers.*.login, 'super-ai-agent'))
+      )
 
     permissions:
       contents: write
@@ -136,13 +136,13 @@ jobs:
           **Tech Stack:** ${{ steps.detect-stack.outputs.stack }}
 
           ### What Happens Next:
-          1. ✅ Tech stack detected: `${{ steps.detect-stack.outputs.stack }}`
-          2. ✅ AI agents loaded from: `.claude-agents/`
+          1. ✅ Tech stack detected: \`${{ steps.detect-stack.outputs.stack }}\`
+          2. ✅ AI agents loaded from: \`.claude-agents/\`
           3. ⏳ **Note:** Full AI implementation requires Anthropic API integration
 
           ### Setup Required:
-          - Ensure `CUSTOM_ANTHROPIC_BASE_URL` is set in repository secrets
-          - Ensure `CUSTOM_ANTHROPIC_TOKEN` is set in repository secrets
+          - Ensure \`CUSTOM_ANTHROPIC_BASE_URL\` is set in repository secrets
+          - Ensure \`CUSTOM_ANTHROPIC_TOKEN\` is set in repository secrets
           - The actual AI processing logic will be implemented in the next phase
 
           ---
