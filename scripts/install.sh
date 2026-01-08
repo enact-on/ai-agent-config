@@ -6,10 +6,10 @@
 # This script installs AI agents into a repository by:
 # 1. Detecting the project's tech stack
 # 2. Creating the .claude-agents directory structure
-# 3. Copying relevant agent configurations
+# 3. Downloading relevant agent configurations
 # 4. Setting up GitHub workflows (non-destructive)
 #
-# Usage: curl -sSL https://raw.githubusercontent.com/company/ai-agent-config/main/scripts/install.sh | bash
+# Usage: curl -sSL https://raw.githubusercontent.com/enact-on/ai-agent-config/main/scripts/install.sh | bash
 ###############################################################################
 
 set -e  # Exit on error
@@ -22,10 +22,11 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-CONFIG_REPO="${CONFIG_REPO:-company/ai-agent-config}"
+CONFIG_REPO="${CONFIG_REPO:-enact-on/ai-agent-config}"
 CONFIG_BRANCH="${CONFIG_BRANCH:-main}"
 CONFIG_DIR=".claude-agents"
 GITHUB_WORKFLOWS_DIR=".github/workflows"
+BASE_URL="https://raw.githubusercontent.com/$CONFIG_REPO/$CONFIG_BRANCH"
 
 # Functions
 log_info() {
@@ -112,81 +113,70 @@ detect_stack() {
     fi
 }
 
-# Download config from central repository
-download_configs() {
-    log_info "Downloading agent configurations..."
-
-    # Create temp directory
-    TEMP_DIR=$(mktemp -d)
-    trap "rm -rf $TEMP_DIR" EXIT
-
-    # Download from GitHub
-    log_info "Fetching from: https://github.com/$CONFIG_REPO/archive/$CONFIG_BRANCH.tar.gz"
+# Download a single file
+download_file() {
+    local url="$1"
+    local output="$2"
 
     if command -v curl > /dev/null 2>&1; then
-        curl -sSL "https://github.com/$CONFIG_REPO/archive/$CONFIG_BRANCH.tar.gz" | tar -xz -C "$TEMP_DIR"
+        curl -sSL "$url" -o "$output"
     elif command -v wget > /dev/null 2>&1; then
-        wget -qO- "https://github.com/$CONFIG_REPO/archive/$CONFIG_BRANCH.tar.gz" | tar -xz -C "$TEMP_DIR"
+        wget -q "$url" -O "$output"
     else
         log_error "Neither curl nor wget is available. Please install one of them."
-        exit 1
+        return 1
     fi
-
-    EXTRACTED_DIR="$TEMP_DIR/ai-agent-config-$CONFIG_BRANCH"
-
-    if [ ! -d "$EXTRACTED_DIR" ]; then
-        log_error "Failed to download configuration repository"
-        exit 1
-    fi
-
-    echo "$EXTRACTED_DIR"
 }
 
 # Create directory structure
 create_structure() {
     log_info "Creating directory structure..."
 
-    mkdir -p "$CONFIG_DIR/agents"
+    mkdir -p "$CONFIG_DIR/agents/common"
+    mkdir -p "$CONFIG_DIR/agents/laravel"
+    mkdir -p "$CONFIG_DIR/agents/nextjs"
+    mkdir -p "$CONFIG_DIR/agents/mobile"
 
     log_success "Created .claude-agents directory"
 }
 
-# Copy agent configurations
-copy_agents() {
-    local EXTRACTED_DIR="$1"
-    local STACK="$2"
+# Download and copy agent configurations
+download_agents() {
+    local STACK="$1"
 
-    log_info "Copying agent configurations..."
+    log_info "Downloading agent configurations..."
 
-    # Always copy common agents
-    if [ -d "$EXTRACTED_DIR/agents/common" ]; then
-        cp -r "$EXTRACTED_DIR/agents/common" "$CONFIG_DIR/agents/"
-        log_success "Copied common agents"
-    fi
+    # Always download common agents
+    log_info "Downloading common agents..."
+    download_file "$BASE_URL/agents/common/team-lead-orchestrator.json" "$CONFIG_DIR/agents/common/team-lead-orchestrator.json"
+    download_file "$BASE_URL/agents/common/code-implementer.json" "$CONFIG_DIR/agents/common/code-implementer.json"
+    download_file "$BASE_URL/agents/common/code-reviewer.json" "$CONFIG_DIR/agents/common/code-reviewer.json"
+    download_file "$BASE_URL/agents/common/security-auditor.json" "$CONFIG_DIR/agents/common/security-auditor.json"
+    log_success "Downloaded common agents"
 
-    # Copy tech-specific agents based on detected stack
+    # Download tech-specific agents based on detected stack
     IFS=',' read -ra STACK_ARRAY <<< "$STACK"
     for stack_item in "${STACK_ARRAY[@]}"; do
         stack_item=$(echo "$stack_item" | xargs)  # Trim whitespace
 
         case "$stack_item" in
             laravel)
-                if [ -d "$EXTRACTED_DIR/agents/laravel" ]; then
-                    cp -r "$EXTRACTED_DIR/agents/laravel" "$CONFIG_DIR/agents/"
-                    log_success "Copied Laravel agents"
-                fi
+                log_info "Downloading Laravel agents..."
+                download_file "$BASE_URL/agents/laravel/laravel-fullstack-dev.json" "$CONFIG_DIR/agents/laravel/laravel-fullstack-dev.json"
+                download_file "$BASE_URL/agents/laravel/laravel-backend-architect.json" "$CONFIG_DIR/agents/laravel/laravel-backend-architect.json"
+                log_success "Downloaded Laravel agents"
                 ;;
             nextjs|nodejs)
-                if [ -d "$EXTRACTED_DIR/agents/nextjs" ]; then
-                    cp -r "$EXTRACTED_DIR/agents/nextjs" "$CONFIG_DIR/agents/"
-                    log_success "Copied Next.js/Node.js agents"
-                fi
+                log_info "Downloading Next.js/Node.js agents..."
+                download_file "$BASE_URL/agents/nextjs/nextjs-fullstack-dev.json" "$CONFIG_DIR/agents/nextjs/nextjs-fullstack-dev.json"
+                download_file "$BASE_URL/agents/nextjs/nodejs-backend-dev.json" "$CONFIG_DIR/agents/nextjs/nodejs-backend-dev.json"
+                log_success "Downloaded Next.js/Node.js agents"
                 ;;
             reactnative|expo)
-                if [ -d "$EXTRACTED_DIR/agents/mobile" ]; then
-                    cp -r "$EXTRACTED_DIR/agents/mobile" "$CONFIG_DIR/agents/"
-                    log_success "Copied mobile agents"
-                fi
+                log_info "Downloading mobile agents..."
+                download_file "$BASE_URL/agents/mobile/react-native-dev.json" "$CONFIG_DIR/agents/mobile/react-native-dev.json"
+                download_file "$BASE_URL/agents/mobile/expo-dev.json" "$CONFIG_DIR/agents/mobile/expo-dev.json"
+                log_success "Downloaded mobile agents"
                 ;;
         esac
     done
@@ -194,29 +184,23 @@ copy_agents() {
 
 # Setup GitHub workflows
 setup_workflows() {
-    local EXTRACTED_DIR="$1"
-
     log_info "Setting up GitHub workflows..."
 
     # Create .github/workflows directory if it doesn't exist
     mkdir -p "$GITHUB_WORKFLOWS_DIR"
 
-    # Copy AI agent workflow if it doesn't exist
+    # Download AI agent workflow if it doesn't exist
     if [ ! -f "$GITHUB_WORKFLOWS_DIR/ai-agent.yml" ]; then
-        if [ -f "$EXTRACTED_DIR/workflows/ai-agent.yml" ]; then
-            cp "$EXTRACTED_DIR/workflows/ai-agent.yml" "$GITHUB_WORKFLOWS_DIR/"
-            log_success "Created ai-agent.yml workflow"
-        fi
+        download_file "$BASE_URL/workflows/ai-agent.yml" "$GITHUB_WORKFLOWS_DIR/ai-agent.yml"
+        log_success "Created ai-agent.yml workflow"
     else
         log_warning "ai-agent.yml already exists, skipping..."
     fi
 
-    # Copy security audit workflow if it doesn't exist
+    # Download security audit workflow if it doesn't exist
     if [ ! -f "$GITHUB_WORKFLOWS_DIR/security-audit.yml" ]; then
-        if [ -f "$EXTRACTED_DIR/workflows/security-audit.yml" ]; then
-            cp "$EXTRACTED_DIR/workflows/security-audit.yml" "$GITHUB_WORKFLOWS_DIR/"
-            log_success "Created security-audit.yml workflow"
-        fi
+        download_file "$BASE_URL/workflows/security-audit.yml" "$GITHUB_WORKFLOWS_DIR/security-audit.yml"
+        log_success "Created security-audit.yml workflow"
     else
         log_warning "security-audit.yml already exists, skipping..."
     fi
@@ -226,112 +210,7 @@ setup_workflows() {
 create_update_script() {
     log_info "Creating update script..."
 
-    cat > update-ai-agents.sh << 'EOF'
-#!/bin/bash
-
-###############################################################################
-# AI Agent Update Script
-#
-# This script updates AI agents from the central repository.
-#
-# Usage: ./update-ai-agents.sh
-###############################################################################
-
-set -e
-
-CONFIG_REPO="${CONFIG_REPO:-company/ai-agent-config}"
-CONFIG_BRANCH="${CONFIG_BRANCH:-main}"
-CONFIG_DIR=".claude-agents"
-GITHUB_WORKFLOWS_DIR=".github/workflows"
-
-echo "Updating AI agents from central repository..."
-
-# Detect current stack
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-cd "$SCRIPT_DIR"
-
-if [ -f "scripts/detect-stack.sh" ]; then
-    STACK=$(bash scripts/detect-stack.sh)
-else
-    STACK=""
-    # Auto-detect
-    [ -f "composer.json" ] && STACK="$STACK,laravel"
-    [ -f "next.config.js" ] && STACK="$STACK,nextjs"
-    [ -d "android" ] && STACK="$STACK,reactnative"
-    [ -f "app.json" ] && grep -q "expo" app.json 2>/dev/null && STACK="$STACK,expo"
-    STACK="${STACK#,}"
-fi
-
-echo "Detected stack: $STACK"
-
-# Download latest configs
-TEMP_DIR=$(mktemp -d)
-trap "rm -rf $TEMP_DIR" EXIT
-
-echo "Downloading from https://github.com/$CONFIG_REPO/archive/$CONFIG_BRANCH.tar.gz..."
-
-if command -v curl > /dev/null 2>&1; then
-    curl -sSL "https://github.com/$CONFIG_REPO/archive/$CONFIG_BRANCH.tar.gz" | tar -xz -C "$TEMP_DIR"
-elif command -v wget > /dev/null 2>&1; then
-    wget -qO- "https://github.com/$CONFIG_REPO/archive/$CONFIG_BRANCH.tar.gz" | tar -xz -C "$TEMP_DIR"
-else
-    echo "Error: Neither curl nor wget is available"
-    exit 1
-fi
-
-EXTRACTED_DIR="$TEMP_DIR/ai-agent-config-$CONFIG_BRANCH"
-
-# Backup existing configs
-if [ -d "$CONFIG_DIR" ]; then
-    BACKUP_DIR="${CONFIG_DIR}.backup.$(date +%Y%m%d_%H%M%S)"
-    cp -r "$CONFIG_DIR" "$BACKUP_DIR"
-    echo "Backed up existing configs to: $BACKUP_DIR"
-fi
-
-# Update agents
-echo "Updating agents..."
-rm -rf "$CONFIG_DIR/agents"
-mkdir -p "$CONFIG_DIR/agents"
-
-# Copy common agents
-if [ -d "$EXTRACTED_DIR/agents/common" ]; then
-    cp -r "$EXTRACTED_DIR/agents/common" "$CONFIG_DIR/agents/"
-    echo "Updated common agents"
-fi
-
-# Copy tech-specific agents
-IFS=',' read -ra STACK_ARRAY <<< "$STACK"
-for stack_item in "${STACK_ARRAY[@]}"; do
-    stack_item=$(echo "$stack_item" | xargs)
-
-    case "$stack_item" in
-        laravel)
-            [ -d "$EXTRACTED_DIR/agents/laravel" ] && cp -r "$EXTRACTED_DIR/agents/laravel" "$CONFIG_DIR/agents/"
-            ;;
-        nextjs|nodejs)
-            [ -d "$EXTRACTED_DIR/agents/nextjs" ] && cp -r "$EXTRACTED_DIR/agents/nextjs" "$CONFIG_DIR/agents/"
-            ;;
-        reactnative|expo)
-            [ -d "$EXTRACTED_DIR/agents/mobile" ] && cp -r "$EXTRACTED_DIR/agents/mobile" "$CONFIG_DIR/agents/"
-            ;;
-    esac
-done
-
-# Update workflows (only if they don't exist)
-mkdir -p "$GITHUB_WORKFLOWS_DIR"
-if [ -f "$EXTRACTED_DIR/workflows/ai-agent.yml" ] && [ ! -f "$GITHUB_WORKFLOWS_DIR/ai-agent.yml" ]; then
-    cp "$EXTRACTED_DIR/workflows/ai-agent.yml" "$GITHUB_WORKFLOWS_DIR/"
-fi
-if [ -f "$EXTRACTED_DIR/workflows/security-audit.yml" ] && [ ! -f "$GITHUB_WORKFLOWS_DIR/security-audit.yml" ]; then
-    cp "$EXTRACTED_DIR/workflows/security-audit.yml" "$GITHUB_WORKFLOWS_DIR/"
-fi
-
-echo "✅ AI agents updated successfully!"
-echo ""
-echo "Updated agents:"
-find "$CONFIG_DIR/agents" -name "*.json" -exec basename {} \; | sed 's/.json$//'
-EOF
-
+    download_file "$BASE_URL/scripts/update.sh" "update-ai-agents.sh"
     chmod +x update-ai-agents.sh
 
     log_success "Created update-ai-agents.sh script"
@@ -346,7 +225,7 @@ create_gitignore() {
     fi
 
     if ! grep -q "^# AI Agent Config" .gitignore; then
-        cat >> .gitignore << 'EOF'
+        cat >> .gitignore <<'EOF'
 
 # AI Agent Config (managed centrally)
 EOF
@@ -367,7 +246,7 @@ print_summary() {
     echo "🔧 GitHub workflows: $GITHUB_WORKFLOWS_DIR"
     echo ""
     echo "📋 Installed Agents:"
-    find "$CONFIG_DIR/agents" -name "*.json" -exec basename {} \; | sed 's/.json$//' | nl
+    find "$CONFIG_DIR/agents" -name "*.json" -exec basename {} \; 2>/dev/null | sed 's/.json$//' | nl
     echo ""
     echo "🚀 Next Steps:"
     echo ""
@@ -396,11 +275,9 @@ main() {
 
     check_git_repo
     detect_stack
-
-    EXTRACTED_DIR=$(download_configs)
     create_structure
-    copy_agents "$EXTRACTED_DIR" "$STACK"
-    setup_workflows "$EXTRACTED_DIR"
+    download_agents "$STACK"
+    setup_workflows
     create_update_script
     create_gitignore
 
