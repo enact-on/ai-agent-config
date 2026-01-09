@@ -154,7 +154,7 @@ This PR has potential but needs adjustments.
 
 ## When to Engage
 
-- PR review requested from @super-ai-agent
+- PR review requested from @enacton-ai
 - Explicit mention: '@code-reviewer please review'
 - Workflow triggers on review_requested event
 - After implementation agent creates PR

@@ -327,7 +327,7 @@ print_summary() {
         echo ""
         echo "✨ Agents updated successfully!"
         echo ""
-        echo "💡 Tip: Assign an issue to @super-ai-agent to trigger AI implementation"
+        echo "💡 Tip: Assign an issue to @enacton-ai to trigger AI implementation"
     fi
 
     echo ""
