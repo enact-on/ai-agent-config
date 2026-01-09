@@ -116,8 +116,13 @@ jobs:
 
           Tech Stack: ${{ steps.detect-stack.outputs.stack }}
 
-          Please implement this task. Create or modify files as needed.
-          After implementing, respond with a list of files changed.
+          IMPORTANT: You must respond with EXACT file contents in this format:
+
+          ```file:filename.ext
+          <exact file content here>
+          ```
+
+          For multiple files, use multiple blocks. Do NOT include markdown formatting inside file blocks.
           EOF
           )
 
@@ -128,11 +133,60 @@ jobs:
             -H "content-type: application/json" \
             -d '{
               "model": "claude-sonnet-4-20250514",
-              "max_tokens": 4096,
+              "max_tokens": 8192,
               "messages": [{"role": "user", "content": "'"$PROMPT"'"}]
             }')
 
-          echo "API Response: $RESPONSE"
+          echo "API Response received, parsing..."
+
+          # Save response to temp file for Python to read
+          echo "$RESPONSE" > /tmp/api_response.json
+
+          # Parse response and create files using Python
+          python3 << 'PYTHON_SCRIPT'
+          import json
+          import os
+          import re
+          import sys
+
+          # Read response from temp file
+          with open('/tmp/api_response.json', 'r') as f:
+              response_text = f.read()
+
+          # Extract content from API response
+          try:
+              response_json = json.loads(response_text)
+              content = response_json.get("content", [{}])[0].get("text", "")
+
+              # Parse file blocks: ```file:path\ncontent\n```
+              file_pattern = r'```file:(.+?)\n(.*?)```'
+              matches = re.findall(file_pattern, content, re.DOTALL)
+
+              for filepath, file_content in matches:
+                  filepath = filepath.strip()
+                  file_content = file_content.strip()
+
+                  # Create directory if needed
+                  if os.path.dirname(filepath):
+                      os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
+                  # Write file
+                  with open(filepath, 'w') as f:
+                      f.write(file_content)
+
+                  print(f"Created: {filepath}")
+
+              if not matches:
+                  print("No file blocks found in response")
+                  print(f"Content preview: {content[:500]}")
+
+          except Exception as e:
+              print(f"Error parsing response: {e}")
+              print(f"Response preview: {response_text[:500]}")
+              sys.exit(1)
+          PYTHON_SCRIPT
+
+          echo "File creation complete"
 
       - name: Process Pull Request (Review)
         if: github.event_name == 'pull_request'
@@ -154,8 +208,8 @@ jobs:
           echo "Files changed:"
           git diff --name-only origin/main...HEAD
 
-          # Execute Claude Code for review
-          claude --prompt "$(cat <<EOF
+          # Build review prompt
+          REVIEW_PROMPT=$(cat <<EOF
           Pull Request Review: $PR_TITLE
 
           Please review this PR for:
@@ -171,9 +225,22 @@ jobs:
           Diff:
           $(git diff origin/main...HEAD)
 
-          Provide constructive feedback as PR comments.
+          Provide constructive feedback. Focus on critical issues.
           EOF
-          )" --config-dir "$CLAUDE_CODE_CONFIG_DIR"
+          )
+
+          # Call Anthropic API for review
+          REVIEW_RESPONSE=$(curl -s -X POST "$ANTHROPIC_BASE_URL/v1/messages" \
+            -H "x-api-key: $ANTHROPIC_AUTH_TOKEN" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d '{
+              "model": "claude-sonnet-4-20250514",
+              "max_tokens": 4096,
+              "messages": [{"role": "user", "content": "'"$REVIEW_PROMPT"'"}]
+            }')
+
+          echo "Review Response: $REVIEW_RESPONSE"
 
       - name: Commit and push changes
         if: github.event_name == 'issues' && success()
