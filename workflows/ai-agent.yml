@@ -9,7 +9,7 @@ on:
 
 env:
   ANTHROPIC_BASE_URL: ${{ secrets.CUSTOM_ANTHROPIC_BASE_URL }}
-  ANTHROPIC_API_KEY: ${{ secrets.CUSTOM_ANTHROPIC_TOKEN }}
+  ANTHROPIC_AUTH_TOKEN: ${{ secrets.CUSTOM_ANTHROPIC_TOKEN }}
   CLAUDE_CODE_CONFIG_DIR: ${{ github.workspace }}/.claude-agents
 
 jobs:
@@ -85,17 +85,6 @@ jobs:
             exit 1
           fi
 
-      - name: Setup Claude Code CLI
-        run: |
-          # Install Claude Code CLI if not present
-          if ! command -v claude &> /dev/null; then
-            echo "Installing Claude Code CLI..."
-            npm install -g @anthropic-ai/claude-code
-          fi
-
-          # Verify installation
-          claude --version
-
       - name: Process Issue (Implementation)
         if: github.event_name == 'issues' || github.event_name == 'workflow_dispatch'
         run: |
@@ -113,12 +102,13 @@ jobs:
           echo "Processing Issue: #$ISSUE_NUMBER"
           echo "Title: $ISSUE_TITLE"
           echo "Stack: ${{ steps.detect-stack.outputs.stack }}"
-          echo "Event: ${{ github.event_name }}"
           echo "=========================================="
 
-          # Execute Claude Code with the prompt
-          # Claude will read the agent configs from CLAUDE_CODE_CONFIG_DIR
-          claude --prompt "$(cat <<EOF
+          # Load agent instructions
+          AGENT_INSTRUCTIONS=$(cat "$CLAUDE_CODE_CONFIG_DIR/agents/common/code-implementer.json" 2>/dev/null || echo "{}")
+
+          # Build the API request
+          PROMPT=$(cat <<EOF
           Issue: $ISSUE_TITLE
 
           Description:
@@ -126,11 +116,23 @@ jobs:
 
           Tech Stack: ${{ steps.detect-stack.outputs.stack }}
 
-          Please implement this task according to the agent configurations in .claude-agents/
-          Make all necessary file changes and ensure the code follows the repository's patterns.
-          After completing the implementation, the changes will be committed automatically.
+          Please implement this task. Create or modify files as needed.
+          After implementing, respond with a list of files changed.
           EOF
-          )" --config-dir "$CLAUDE_CODE_CONFIG_DIR"
+          )
+
+          # Call Anthropic API
+          RESPONSE=$(curl -s -X POST "$ANTHROPIC_BASE_URL/v1/messages" \
+            -H "x-api-key: $ANTHROPIC_AUTH_TOKEN" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d '{
+              "model": "claude-sonnet-4-20250514",
+              "max_tokens": 4096,
+              "messages": [{"role": "user", "content": "'"$PROMPT"'"}]
+            }')
+
+          echo "API Response: $RESPONSE"
 
       - name: Process Pull Request (Review)
         if: github.event_name == 'pull_request'
