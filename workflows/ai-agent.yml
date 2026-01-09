@@ -108,8 +108,7 @@ jobs:
           AGENT_INSTRUCTIONS=$(cat "$CLAUDE_CODE_CONFIG_DIR/agents/common/code-implementer.json" 2>/dev/null || echo "{}")
 
           # Build the API request
-          read -r -d '' PROMPT << EOF
-          Issue: $ISSUE_TITLE
+          PROMPT="Issue: $ISSUE_TITLE
 
           Description:
           $ISSUE_BODY
@@ -124,10 +123,12 @@ jobs:
           exact file content here on multiple lines
           END_FILE
 
-          For multiple files, repeat this block.
-          EOF
+          For multiple files, repeat this block."
 
           # Call Anthropic API
+          echo "Calling API at: $ANTHROPIC_BASE_URL"
+          echo "Prompt length: ${#PROMPT} characters"
+
           RESPONSE=$(curl -s -X POST "$ANTHROPIC_BASE_URL/v1/messages" \
             -H "x-api-key: $ANTHROPIC_AUTH_TOKEN" \
             -H "anthropic-version: 2023-06-01" \
@@ -138,7 +139,20 @@ jobs:
               "messages": [{"role": "user", "content": "'"$PROMPT"'"}]
             }')
 
+          CURL_EXIT_CODE=$?
+
+          if [ $CURL_EXIT_CODE -ne 0 ]; then
+            echo "ERROR: curl failed with exit code $CURL_EXIT_CODE"
+            exit 1
+          fi
+
           echo "API Response received, parsing..."
+          echo "Response length: ${#RESPONSE} characters"
+
+          if [ -z "$RESPONSE" ]; then
+            echo "ERROR: Empty response from API"
+            exit 1
+          fi
 
           # Save response to temp file for Python to read
           echo "$RESPONSE" > /tmp/api_response.json
