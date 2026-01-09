@@ -116,8 +116,10 @@ jobs:
           echo "Event: ${{ github.event_name }}"
           echo "=========================================="
 
-          # Build the prompt for Claude Code
-          PROMPT="Issue: $ISSUE_TITLE
+          # Execute Claude Code with the prompt
+          # Claude will read the agent configs from CLAUDE_CODE_CONFIG_DIR
+          claude --prompt "$(cat <<EOF
+          Issue: $ISSUE_TITLE
 
           Description:
           $ISSUE_BODY
@@ -126,11 +128,9 @@ jobs:
 
           Please implement this task according to the agent configurations in .claude-agents/
           Make all necessary file changes and ensure the code follows the repository's patterns.
-          After completing the implementation, the changes will be committed automatically."
-
-          # Execute Claude Code with the prompt
-          # Claude will read the agent configs from CLAUDE_CODE_CONFIG_DIR
-          claude --prompt "$PROMPT" --config-dir "$CLAUDE_CODE_CONFIG_DIR"
+          After completing the implementation, the changes will be committed automatically.
+          EOF
+          )" --config-dir "$CLAUDE_CODE_CONFIG_DIR"
 
       - name: Process Pull Request (Review)
         if: github.event_name == 'pull_request'
@@ -152,8 +152,9 @@ jobs:
           echo "Files changed:"
           git diff --name-only origin/main...HEAD
 
-          # Build the prompt for Claude Code review
-          REVIEW_PROMPT="Pull Request Review: $PR_TITLE
+          # Execute Claude Code for review
+          claude --prompt "$(cat <<EOF
+          Pull Request Review: $PR_TITLE
 
           Please review this PR for:
           - Code quality and best practices
@@ -168,10 +169,9 @@ jobs:
           Diff:
           $(git diff origin/main...HEAD)
 
-          Provide constructive feedback as PR comments."
-
-          # Execute Claude Code for review
-          claude --prompt "$REVIEW_PROMPT" --config-dir "$CLAUDE_CODE_CONFIG_DIR"
+          Provide constructive feedback as PR comments.
+          EOF
+          )" --config-dir "$CLAUDE_CODE_CONFIG_DIR"
 
       - name: Commit and push changes
         if: github.event_name == 'issues' && success()
@@ -203,23 +203,29 @@ jobs:
             echo "Changes committed and pushed successfully"
 
             # Post success comment
-            gh issue comment "${{ github.event.issue.number }}" --body "## ✅ Implementation Complete
+            gh issue comment "${{ github.event.issue.number }}" --body "$(cat <<EOF
+          ## ✅ Implementation Complete
 
-**Issue:** #${{ github.event.issue.number }} - ${{ github.event.issue.title }}
-**Tech Stack:** \`${{ steps.detect-stack.outputs.stack }}\`
+          **Issue:** #${{ github.event.issue.number }} - ${{ github.event.issue.title }}
+          **Tech Stack:** \`${{ steps.detect-stack.outputs.stack }}\`
 
-### Changes Made:
-$(git diff --stat origin/main...HEAD)"
+          ### Changes Made:
+          $(git diff --stat origin/main...HEAD)
+          EOF
+          )"
 
           else
             echo "No changes to commit"
 
             # Post no changes comment
-            gh issue comment "${{ github.event.issue.number }}" --body "## ℹ️ No Changes Required
+            gh issue comment "${{ github.event.issue.number }}" --body "$(cat <<EOF
+          ## ℹ️ No Changes Required
 
-**Issue:** #${{ github.event.issue.number }} - ${{ github.event.issue.title }}
+          **Issue:** #${{ github.event.issue.number }} - ${{ github.event.issue.title }}
 
-The AI agent analyzed the issue but no code changes were necessary."
+          The AI agent analyzed the issue but no code changes were necessary.
+          EOF
+          )"
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -227,16 +233,19 @@ The AI agent analyzed the issue but no code changes were necessary."
       - name: Post comment on PR
         if: github.event_name == 'pull_request' && success()
         run: |
-          gh pr comment "${{ github.event.pull_request.number }}" --body "## 🤖 AI Agent Review Complete
+          gh pr comment "${{ github.event.pull_request.number }}" --body "$(cat <<EOF
+          ## 🤖 AI Agent Review Complete
 
-**PR:** #${{ github.event.pull_request.number }} - ${{ github.event.pull_request.title }}
-**Tech Stack:** \`${{ steps.detect-stack.outputs.stack }}\`
+          **PR:** #${{ github.event.pull_request.number }} - ${{ github.event.pull_request.title }}
+          **Tech Stack:** \`${{ steps.detect-stack.outputs.stack }}\`
 
-### Review Summary:
-The AI agent has reviewed this pull request and provided feedback via inline comments.
+          ### Review Summary:
+          The AI agent has reviewed this pull request and provided feedback via inline comments.
 
----
-*Reviewed by: enacton-ai*"
+          ---
+          *Reviewed by: enacton-ai*
+          EOF
+          )"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
