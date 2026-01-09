@@ -85,6 +85,17 @@ jobs:
             exit 1
           fi
 
+      - name: Setup Claude Code CLI
+        run: |
+          # Install Claude Code CLI if not present
+          if ! command -v claude &> /dev/null; then
+            echo "Installing Claude Code CLI..."
+            npm install -g @anthropic-ai/claude-code
+          fi
+
+          # Verify installation
+          claude --version
+
       - name: Process Issue (Implementation)
         if: github.event_name == 'issues' || github.event_name == 'workflow_dispatch'
         run: |
@@ -105,12 +116,21 @@ jobs:
           echo "Event: ${{ github.event_name }}"
           echo "=========================================="
 
-          # Note: This is a placeholder for actual AI implementation
-          # The actual implementation would call the Anthropic API here
-          # For now, this creates a comment to acknowledge the issue
+          # Build the prompt for Claude Code
+          PROMPT="Issue: $ISSUE_TITLE
 
-          echo "AI Agent would process this issue."
-          echo "This requires Anthropic API integration."
+          Description:
+          $ISSUE_BODY
+
+          Tech Stack: ${{ steps.detect-stack.outputs.stack }}
+
+          Please implement this task according to the agent configurations in .claude-agents/
+          Make all necessary file changes and ensure the code follows the repository's patterns.
+          After completing the implementation, the changes will be committed automatically."
+
+          # Execute Claude Code with the prompt
+          # Claude will read the agent configs from CLAUDE_CODE_CONFIG_DIR
+          claude --prompt "$PROMPT" --config-dir "$CLAUDE_CODE_CONFIG_DIR"
 
       - name: Process Pull Request (Review)
         if: github.event_name == 'pull_request'
@@ -132,61 +152,91 @@ jobs:
           echo "Files changed:"
           git diff --name-only origin/main...HEAD
 
-          # Note: This is a placeholder for actual AI review
-          # The actual implementation would call the Anthropic API here
-          # For now, this posts a placeholder comment
+          # Build the prompt for Claude Code review
+          REVIEW_PROMPT="Pull Request Review: $PR_TITLE
 
-      - name: Post comment on issue
+          Please review this PR for:
+          - Code quality and best practices
+          - Security vulnerabilities
+          - Performance considerations
+          - Testing coverage
+          - Alignment with ${{ steps.detect-stack.outputs.stack }} conventions
+
+          Files changed:
+          $(git diff --name-only origin/main...HEAD)
+
+          Diff:
+          $(git diff origin/main...HEAD)
+
+          Provide constructive feedback as PR comments."
+
+          # Execute Claude Code for review
+          claude --prompt "$REVIEW_PROMPT" --config-dir "$CLAUDE_CODE_CONFIG_DIR"
+
+      - name: Commit and push changes
         if: github.event_name == 'issues' && success()
         run: |
-          COMMENT="## 🤖 AI Agent Acknowledgment
+          # Configure git
+          git config user.name "enacton-ai"
+          git config user.email "enacton-ai@github.com"
 
-          **Issue:** #${{ github.event.issue.number }} - ${{ github.event.issue.title }}
-          **Tech Stack:** ${{ steps.detect-stack.outputs.stack }}
+          # Check if there are any changes
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Changes detected, committing..."
 
-          ### What Happens Next:
-          1. ✅ Tech stack detected: \`${{ steps.detect-stack.outputs.stack }}\`
-          2. ✅ AI agents loaded from: \`.claude-agents/\`
-          3. ⏳ **Note:** Full AI implementation requires Anthropic API integration
+            # Get default branch
+            DEFAULT_BRANCH=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
 
-          ### Setup Required:
-          - Ensure \`CUSTOM_ANTHROPIC_BASE_URL\` is set in repository secrets
-          - Ensure \`CUSTOM_ANTHROPIC_TOKEN\` is set in repository secrets
-          - The actual AI processing logic will be implemented in the next phase
+            # Add all changes
+            git add -A
 
-          ---
-          *Processed by: enacton-ai*"
+            # Create commit
+            git commit -m "Implement: ${{ github.event.issue.title }}
 
-          gh issue comment "${{ github.event.issue.number }}" --body "$COMMENT"
+            - Issue: #${{ github.event.issue.number }}
+            - Tech Stack: ${{ steps.detect-stack.outputs.stack }}
+            - Processed by: enacton-ai"
+
+            # Push to default branch
+            git push origin HEAD:$DEFAULT_BRANCH
+
+            echo "Changes committed and pushed successfully"
+
+            # Post success comment
+            gh issue comment "${{ github.event.issue.number }}" --body "## ✅ Implementation Complete
+
+**Issue:** #${{ github.event.issue.number }} - ${{ github.event.issue.title }}
+**Tech Stack:** \`${{ steps.detect-stack.outputs.stack }}\`
+
+### Changes Made:
+$(git diff --stat origin/main...HEAD)"
+
+          else
+            echo "No changes to commit"
+
+            # Post no changes comment
+            gh issue comment "${{ github.event.issue.number }}" --body "## ℹ️ No Changes Required
+
+**Issue:** #${{ github.event.issue.number }} - ${{ github.event.issue.title }}
+
+The AI agent analyzed the issue but no code changes were necessary."
+          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Post comment on PR
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && success()
         run: |
-          COMMENT="## 🤖 AI Agent Review
+          gh pr comment "${{ github.event.pull_request.number }}" --body "## 🤖 AI Agent Review Complete
 
-          **PR:** #${{ github.event.pull_request.number }} - ${{ github.event.pull_request.title }}
-          **Tech Stack:** ${{ steps.detect-stack.outputs.stack }}
+**PR:** #${{ github.event.pull_request.number }} - ${{ github.event.pull_request.title }}
+**Tech Stack:** \`${{ steps.detect-stack.outputs.stack }}\`
 
-          ### Files Changed:
-          \`\`\`
-          $(git diff --name-only origin/main...HEAD | head -20)
-          \`\`\`
+### Review Summary:
+The AI agent has reviewed this pull request and provided feedback via inline comments.
 
-          ### What Happens Next:
-          1. ✅ Tech stack detected
-          2. ✅ PR changes analyzed
-          3. ⏳ **Note:** Full AI review requires Anthropic API integration
-
-          ### Setup Required:
-          - Ensure secrets are configured
-          - AI will review code quality, security, and best practices
-
-          ---
-          *Reviewed by: enacton-ai*"
-
-          gh pr comment "${{ github.event.pull_request.number }}" --body "$COMMENT"
+---
+*Reviewed by: enacton-ai*"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
