@@ -1,382 +1,194 @@
-# AI Agent Configuration Repository
+# ai-agent-config
 
-> Centralized AI agent configurations for automated development assistance across 100+ repositories.
+`ai-agent-config` is a public starter repository for rolling out Claude-powered agent workflows across many repositories without touching each repo's existing `.claude/` directory.
 
-## Overview
+It installs stack-aware reference agents into `.claude-agents/`, adds non-destructive GitHub Actions workflows, and gives teams a repeatable setup for:
 
-This repository contains AI agent definitions, workflows, and installation scripts for deploying Claude Code AI agents across multiple GitHub repositories. Teams can assign issues or PRs to `@enacton-ai` to trigger automated code review, implementation, and security analysis.
+- `@claude` comment-driven review and implementation
+- assignment-based issue handling and PR review requests
+- scheduled security audits
+- shared agent instructions across Laravel, Next.js, Node.js, React Native, and Expo repositories
 
-## Features
+## What This Repo Installs
 
-- **Automated AI Agents**: Specialized agents for different tech stacks and tasks
-- **Simple Installation**: One-command setup with automatic tech stack detection
-- **Tech Stack Specific**: Agents tailored for Laravel, Next.js, Node.js, React Native, and Expo
-- **Security Audits**: Automated weekly security vulnerability scanning
-- **Scalable**: Manages 100+ repositories from a single configuration source
-- **Easy Updates**: Single command to update all agents across all repositories
+The installer creates:
 
-## Architecture
+- `.claude-agents/agents/` with common and stack-specific reference markdown files
+- `.claude-agents/config/stacks.txt` with detected tech stacks
+- `.claude-agents/config/install-source.env` so updates can be re-run consistently
+- `.github/workflows/claude-comment-assistant.yml`
+- `.github/workflows/claude-assignment-router.yml`
+- `.github/workflows/security-audit.yml`
+- `update-ai-agents.sh`
+- `update-ai-agents.ps1`
 
-### Agent Hierarchy
+The installer does not overwrite an existing `.claude/` directory. All generated content goes into `.claude-agents/`.
 
+## Repository Layout
+
+```text
+agents/
+  common/
+  laravel/
+  nextjs/
+  mobile/
+scripts/
+  detect-stack.sh
+  install.sh
+  install.ps1
+  update.sh
+  update.ps1
+workflows/
+  claude-comment-assistant.yml
+  claude-assignment-router.yml
+  security-audit.yml
 ```
-Orchestration Layer
-└── team-lead-orchestrator (planning, delegation)
 
-Technology-Specific Agents
-├── Laravel: laravel-fullstack-dev, laravel-backend-architect
-├── Next.js/Node: nextjs-fullstack-dev, nodejs-backend-dev
-└── Mobile: react-native-dev, expo-dev
+## Install Into A Target Repository
 
-Role-Based Agents
-├── code-implementer (executes implementations)
-├── code-reviewer (reviews PRs)
-└── security-auditor (security analysis)
-```
-
-## Quick Start
-
-### 1. Install in Your Repository
+### Option 1: Add As A Git Submodule
 
 ```bash
-# From your repository root
-curl -sSL https://raw.githubusercontent.com/company/ai-agent-config/main/scripts/install.sh | bash
+git submodule add https://github.com/enact-on/ai-agent-config.git tools/ai-agent-config
+bash tools/ai-agent-config/scripts/install.sh
 ```
 
-The installer will:
-- Detect your tech stack automatically
-- Create `.claude-agents` directory with relevant agents
-- Set up GitHub workflows
-- Create an update script for future updates
+On Windows PowerShell:
 
-### 2. Configure GitHub Secrets
-
-Add the following secrets to your repository (Settings → Secrets and variables → Actions):
-
-- `CUSTOM_ANTHROPIC_BASE_URL`: Your custom Anthropic API endpoint
-- `CUSTOM_ANTHROPIC_TOKEN`: Your authentication token
-
-### 3. Create Bot Account (Optional)
-
-1. Create a GitHub bot account: `enacton-ai`
-2. Grant it read access to your repositories
-3. Use this account as the assignee for AI-triggered tasks
-
-### 4. Use the AI Agents
-
-**For Implementation:**
-1. Create a GitHub issue describing the task
-2. Assign the issue to `@enacton-ai`
-3. The AI will analyze, plan, and create a PR with the implementation
-
-**For Code Review:**
-1. Create a pull request
-2. Request review from `@enacton-ai`
-3. The AI will analyze the changes and provide review comments
-
-## Repository Structure
-
-```
-ai-agent-config/
-├── agents/
-│   ├── common/                    # Universal agents
-│   │   ├── team-lead-orchestrator.json
-│   │   ├── code-implementer.json
-│   │   ├── code-reviewer.json
-│   │   └── security-auditor.json
-│   ├── laravel/                   # Laravel-specific agents
-│   │   ├── laravel-fullstack-dev.json
-│   │   └── laravel-backend-architect.json
-│   ├── nextjs/                    # Next.js/Node.js agents
-│   │   ├── nextjs-fullstack-dev.json
-│   │   └── nodejs-backend-dev.json
-│   └── mobile/                    # Mobile development agents
-│       ├── react-native-dev.json
-│       └── expo-dev.json
-├── workflows/
-│   ├── ai-agent.yml               # Main AI workflow
-│   └── security-audit.yml         # Weekly security audit
-├── scripts/
-│   ├── install.sh                 # Installation script
-│   ├── detect-stack.sh            # Tech stack detection
-│   └── update.sh                  # Update script
-└── README.md
+```powershell
+git submodule add https://github.com/enact-on/ai-agent-config.git tools/ai-agent-config
+powershell -ExecutionPolicy Bypass -File .\tools\ai-agent-config\scripts\install.ps1
 ```
 
-## Available Agents
+### Option 2: Fetch The Installer Directly
 
-### Common Agents
-
-| Agent | Description | Triggers |
-|-------|-------------|----------|
-| `team-lead-orchestrator` | Analyzes requirements, creates plans, delegates to specialists | plan, architect, design, complex |
-| `code-implementer` | Executes implementation tasks with clean, functional code | implement, add feature, fix bug |
-| `code-reviewer` | Reviews PRs for quality and best practices | review, code review, quality check |
-| `security-auditor` | Performs security analysis and vulnerability detection | security, audit, vulnerability |
-
-### Technology-Specific Agents
-
-| Agent | Tech Stack | Specialization |
-|-------|-----------|----------------|
-| `laravel-fullstack-dev` | Laravel/PHP | Full-stack Laravel development |
-| `laravel-backend-architect` | Laravel/PHP | Backend architecture and design |
-| `nextjs-fullstack-dev` | Next.js/React | Modern web development |
-| `nodejs-backend-dev` | Node.js | Backend API development |
-| `react-native-dev` | React Native | Cross-platform mobile apps |
-| `expo-dev` | Expo | Rapid mobile development |
-
-## Usage Examples
-
-### Example 1: Feature Implementation
+Direct installer commands for the published public repository:
 
 ```bash
-# Create GitHub issue
-gh issue create \
-  --title "Add user authentication with OAuth2" \
-  --body "Implement OAuth2 login with Google and GitHub providers" \
-  --assignee "enacton-ai"
+curl -fsSL https://raw.githubusercontent.com/enact-on/ai-agent-config/main/scripts/install.sh | bash
 ```
 
-The AI will:
-1. Analyze the requirement
-2. Create an implementation plan
-3. Detect the tech stack
-4. Delegate to appropriate specialist agents
-5. Create a PR with the implementation
+On Windows PowerShell:
 
-### Example 2: Code Review
-
-```bash
-# Create PR and request review
-gh pr create \
-  --title "Refactor user service" \
-  --body "Improved the user service architecture" \
-  --reviewer "enacton-ai"
+```powershell
+iwr https://raw.githubusercontent.com/enact-on/ai-agent-config/main/scripts/install.ps1 -UseBasicParsing | iex
 ```
 
-The AI will:
-1. Review all changed files
-2. Check for bugs and code quality issues
-3. Verify best practices
-4. Provide constructive feedback
+If you copied `install.sh` or `install.ps1` into another repository for testing, you must tell it where the public config repo lives. Otherwise it will try to fetch from the placeholder path and return `404`.
 
-### Example 3: Security Audit
-
-Security audits run automatically every Sunday at midnight UTC. You can also trigger manually:
+Examples:
 
 ```bash
-# Via GitHub CLI
-gh workflow run security-audit.yml
-
-# Or via GitHub web interface
-# Actions → Security Audit → Run workflow
+AI_AGENT_CONFIG_REPO=enact-on/ai-agent-config ./install.sh
+./install.sh enact-on/ai-agent-config
 ```
 
-## Updating Agents
+```powershell
+$env:AI_AGENT_CONFIG_REPO = "enact-on/ai-agent-config"
+.\install.ps1
+.\install.ps1 -RepoSlug enact-on/ai-agent-config
+```
 
-When the central configuration repository is updated:
+## Required GitHub Setup
+
+There are two parts to the GitHub side:
+
+1. Install Claude on the repository.
+2. Add the secrets and variables the workflows expect.
+
+### Claude GitHub App Setup
+
+Anthropic's Claude Code GitHub Actions docs currently say the quickest setup path is to run `/install-github-app` inside Claude Code, or manually install the official Claude GitHub App and add the required workflow/secrets.
+
+Recommended setup:
+
+1. Open Claude Code locally and run `/install-github-app`.
+2. If you prefer manual setup, install the official GitHub App from `https://github.com/apps/claude`.
+3. Grant repository access with at least:
+   - Contents: Read and write
+   - Issues: Read and write
+   - Pull requests: Read and write
+4. Enable GitHub Actions in the target repository.
+
+If you want assignment-based automation with your own GitHub App identity instead of the official Claude app, create/install your own app and store:
+
+- `APP_ID`
+- `APP_PRIVATE_KEY`
+
+Then set the repository variable:
+
+- `AI_AGENT_BOT_LOGIN`
+
+Example value:
+
+```text
+super-ai-agent[bot]
+```
+
+## Required Secrets
+
+Add these repository or organization secrets before enabling the workflows:
+
+- `ANTHROPIC_API_KEY`: API key for Anthropic or your Anthropic-compatible provider
+- `ANTHROPIC_BASE_URL`: base URL for your provider
+
+If you use a custom GitHub App for repository writes:
+
+- `APP_ID`
+- `APP_PRIVATE_KEY`
+
+## How The Workflows Behave
+
+### `claude-comment-assistant.yml`
+
+Runs when someone comments `@claude` on:
+
+- an issue
+- a pull request conversation
+- an inline pull request review thread
+
+The workflow builds a prompt from the markdown files in `.claude-agents/agents/` so Claude sees your shared reviewer, implementer, orchestrator, and stack-specific instructions before responding. The installed agent context is markdown-based, not JSON-based.
+
+### `claude-assignment-router.yml`
+
+Runs on:
+
+- issue assignment
+- PR review request
+
+When the assignee or requested reviewer matches `AI_AGENT_BOT_LOGIN`, Claude either:
+
+- implements the assigned issue
+- performs a requested PR review
+
+### `security-audit.yml`
+
+Runs weekly and on manual dispatch. It uses the security auditor reference plus stack-specific files to inspect the repository and report findings.
+
+## How To Keep Agent Guidance Current
+
+Update the markdown files in `agents/`. Then target repositories can pull the newest content by running:
 
 ```bash
-# From your repository root
 ./update-ai-agents.sh
-
-# Or specify custom repo/branch
-./update-ai-agents.sh --repo company/ai-agent-config --branch develop
-
-# Dry run to see what would change
-./update-ai-agents.sh --dry-run
 ```
 
-## GitHub Workflows
+Or:
 
-### AI Agent Workflow (`.github/workflows/ai-agent.yml`)
-
-**Triggers:**
-- Issue assigned to `@enacton-ai`
-- PR review requested from `@enacton-ai`
-
-**Behavior:**
-- Detects project tech stack
-- Selects appropriate AI agents
-- Executes the task
-- Creates PR or review comments
-- Posts status updates
-
-### Security Audit Workflow (`.github/workflows/security-audit.yml`)
-
-**Triggers:**
-- Weekly schedule (Sundays at midnight UTC)
-- Manual dispatch
-
-**Behavior:**
-- Runs dependency vulnerability scans
-- Performs secret detection
-- Executes AI security analysis
-- Creates issue with findings
-
-## Configuration
-
-### Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `ANTHROPIC_BASE_URL` | Custom API endpoint | Yes |
-| `ANTHROPIC_AUTH_TOKEN` | Authentication token | Yes |
-| `CLAUDE_CODE_CONFIG_DIR` | Agent config directory | No (default: `.claude-agents`) |
-
-### Agent Selection
-
-Claude Code automatically selects agents based on:
-1. Keywords in agent `description` field
-2. Issue/PR content analysis
-3. Codebase context
-4. Explicit mention of agent name
-
-### Tech Stack Detection
-
-The installer automatically detects:
-- **Laravel**: `composer.json` with Laravel dependencies
-- **Next.js**: `next.config.js` or `next.config.mjs` or `next.config.ts`
-- **Node.js**: `package.json` with Express/Fastify/NestJS
-- **Expo**: `app.json` with Expo configuration
-- **React Native**: `android/` or `ios/` directories
-
-## Customization
-
-### Adding Custom Agents
-
-Create a new agent file in the appropriate directory:
-
-```json
-{
-  "name": "my-custom-agent",
-  "description": "Triggers on keywords: custom, specialized",
-  "instructions": "Detailed behavior and capabilities...",
-  "tools": ["Read", "Write", "Edit", "Bash"],
-  "model": "inherit"
-}
+```powershell
+.\update-ai-agents.ps1
 ```
 
-### Modifying Workflows
+## Notes For Developers
 
-Workflows are never overwritten during updates. You can safely customize:
-- Timeout values
-- Permissions
-- Additional steps
-- Conditional logic
+- Keep project-specific coding rules in the target repo's own `CLAUDE.md`.
+- Keep shared cross-repo automation guidance in this repository's `agents/` folder.
+- The installed workflows are additive. Existing workflows are left untouched.
+- The installer only writes workflow files if they are missing.
 
-### Tech Stack Extension
+## Suggested Rollout
 
-To add support for a new tech stack:
-
-1. Create agent files in `agents/<stack>/`
-2. Update `scripts/detect-stack.sh`
-3. Update `scripts/install.sh` to copy the new agents
-4. Update documentation
-
-## Best Practices
-
-### For Developers
-
-1. **Be Specific in Issues**: Provide detailed requirements for better AI understanding
-2. **Use Keywords**: Include relevant keywords (e.g., "implement", "review", "security") to trigger appropriate agents
-3. **Review AI Output**: Always review AI-generated code before merging
-4. **Provide Context**: Include relevant context about the codebase in issues
-
-### For Repository Maintainers
-
-1. **Keep Config Updated**: Run `./update-ai-agents.sh` regularly
-2. **Monitor Workflows**: Check GitHub Actions for failed runs
-3. **Review Security Reports**: Address security audit findings promptly
-4. **Customize Agents**: Adjust agent behaviors for your team's coding standards
-
-### For Admin Team
-
-1. **Version Control**: Tag releases of the config repository (e.g., `v1.0.0`)
-2. **Test Changes**: Test config updates on pilot repositories first
-3. **Document Changes**: Maintain a changelog for agent updates
-4. **Monitor Usage**: Track how agents are being used across repositories
-
-## Troubleshooting
-
-### Installation Fails
-
-```bash
-# Check if curl/wget is installed
-which curl wget
-
-# Manually download and run
-curl -O https://raw.githubusercontent.com/company/ai-agent-config/main/scripts/install.sh
-bash install.sh
-```
-
-### Agents Not Triggering
-
-1. Verify GitHub secrets are configured
-2. Check GitHub Actions logs for errors
-3. Ensure bot account has repository access
-4. Verify issue/PR is assigned to `@enacton-ai`
-
-### Wrong Agents Selected
-
-1. Check agent `description` keywords
-2. Be more specific in issue/PR descriptions
-3. Explicitly mention the desired agent name
-4. Update tech stack detection if needed
-
-### Workflow Permissions Error
-
-Add these permissions to your workflow:
-```yaml
-permissions:
-  contents: write
-  pull-requests: write
-  issues: write
-  id-token: write
-  actions: read
-```
-
-## Security Considerations
-
-- **Secrets Management**: Never commit API keys or tokens
-- **Access Control**: Limit bot account permissions to read-only
-- **Code Review**: Always review AI-generated code before merging
-- **Audit Logs**: Review GitHub Actions logs regularly
-- **Dependency Updates**: Keep dependencies updated for security patches
-
-## Contributing
-
-To contribute to this configuration repository:
-
-1. Fork the repository
-2. Create a feature branch
-3. Add or modify agent configurations
-4. Test on pilot repositories
-5. Submit a pull request
-
-## License
-
-MIT License
-
-## Support
-
-For issues or questions:
-- GitHub Issues: https://github.com/enact-on/ai-agent-config/issues
-- Documentation: https://github.com/enact-on/ai-agent-config
-
-## Changelog
-
-### v1.0.0 (2024-01-15)
-- Initial release
-- Common agents: orchestrator, implementer, reviewer, auditor
-- Laravel agents: fullstack, architect
-- Next.js/Node agents: fullstack, backend
-- Mobile agents: React Native, Expo
-- Installation and update scripts
-- GitHub workflows for automation
-
----
-
-Made with love by the development team
-
-Automating development assistance across all repositories.
+1. Publish this repository publicly.
+2. Pilot it on 2-3 repositories.
+3. Tune the agent markdown files based on real reviews and implementation tasks.
+4. Roll it out more broadly with the submodule or install-script flow.

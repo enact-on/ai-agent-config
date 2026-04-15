@@ -1,9 +1,10 @@
-name: Weekly Security Audit
+name: Claude Comment Assistant
 
 on:
-  schedule:
-    - cron: "0 0 * * 0"
-  workflow_dispatch:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
 
 permissions:
   contents: write
@@ -11,11 +12,12 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: claude-security-${{ github.event.repository.full_name }}
+  group: claude-comment-${{ github.event.repository.full_name }}-${{ github.event_name }}-${{ github.event.comment.id }}
   cancel-in-progress: false
 
 jobs:
-  security-audit:
+  claude-from-comment:
+    if: contains(github.event.comment.body, '@claude')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -28,18 +30,29 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Build security audit prompt
+      - name: Ensure agent references exist
+        run: |
+          test -d .claude-agents/agents
+
+      - name: Build prompt from installed agent markdown
         id: build_prompt
         shell: bash
+        env:
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
           set -euo pipefail
           prompt_file="$(mktemp)"
           {
-            echo "You are running the scheduled security audit for this repository."
+            echo "You are the repository automation assistant."
+            echo
+            echo "Use the following installed reference agents as your operating guidance."
             echo
             for file in \
-              .claude-agents/agents/common/security-auditor.md \
-              .claude-agents/agents/common/code-reviewer.md; do
+              .claude-agents/agents/common/team-lead-orchestrator.md \
+              .claude-agents/agents/common/code-reviewer.md \
+              .claude-agents/agents/common/code-implementer.md \
+              .claude-agents/agents/common/security-auditor.md; do
               if [[ -f "$file" ]]; then
                 echo "--- FILE: $file ---"
                 cat "$file"
@@ -78,8 +91,15 @@ jobs:
               done < .claude-agents/config/stacks.txt
             fi
 
-            echo "Audit the repository for security issues, insecure workflow patterns, secret exposure risks, and missing safeguards."
-            echo "Summarize the findings clearly. If there are actionable problems, create or update a GitHub issue with the audit results."
+            echo "Current request:"
+            echo "- Event: ${GITHUB_EVENT_NAME}"
+            echo "- Comment author: ${COMMENT_AUTHOR}"
+            echo "- Comment body:"
+            printf '%s\n' "${COMMENT_BODY}"
+            echo
+            echo "If the comment asks for review, act as a reviewer first."
+            echo "If the comment asks for implementation, make the smallest safe change and explain what changed."
+            echo "If the request is unclear, ask a short clarifying question in the GitHub thread."
           } > "$prompt_file"
 
           {
@@ -88,7 +108,7 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Run Claude security audit
+      - name: Run Claude
         uses: anthropics/claude-code-action@v1
         with:
           prompt: ${{ steps.build_prompt.outputs.prompt }}

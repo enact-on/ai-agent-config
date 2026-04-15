@@ -1,0 +1,143 @@
+name: Claude Assignment Router
+
+on:
+  issues:
+    types: [assigned]
+  pull_request:
+    types: [review_requested]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: claude-assignment-${{ github.event.repository.full_name }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  route-assignment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AI_AGENT_BOT_LOGIN: ${{ vars.AI_AGENT_BOT_LOGIN }}
+      ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_CODE_CONFIG_DIR: ${{ github.workspace }}/.claude-agents
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decide whether to run
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          should_run=false
+
+          if [[ -z "${AI_AGENT_BOT_LOGIN}" ]]; then
+            echo "Configure repository variable AI_AGENT_BOT_LOGIN to enable assignment routing."
+          elif [[ "${GITHUB_EVENT_NAME}" == "issues" ]]; then
+            if [[ "${{ github.event.assignee.login }}" == "${AI_AGENT_BOT_LOGIN}" ]]; then
+              should_run=true
+            fi
+          elif [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            reviewers='${{ join(github.event.pull_request.requested_reviewers.*.login, ",") }}'
+            if [[ ",${reviewers}," == *",${AI_AGENT_BOT_LOGIN},"* ]]; then
+              should_run=true
+            fi
+          fi
+
+          echo "should_run=${should_run}" >> "$GITHUB_OUTPUT"
+
+      - name: Build prompt from installed agent markdown
+        if: steps.gate.outputs.should_run == 'true'
+        id: build_prompt
+        shell: bash
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          prompt_file="$(mktemp)"
+          {
+            echo "You are handling a GitHub assignment-based automation request."
+            echo
+            for file in \
+              .claude-agents/agents/common/team-lead-orchestrator.md \
+              .claude-agents/agents/common/code-reviewer.md \
+              .claude-agents/agents/common/code-implementer.md \
+              .claude-agents/agents/common/security-auditor.md; do
+              if [[ -f "$file" ]]; then
+                echo "--- FILE: $file ---"
+                cat "$file"
+                echo
+              fi
+            done
+
+            if [[ -f .claude-agents/config/stacks.txt ]]; then
+              while IFS= read -r stack; do
+                case "$stack" in
+                  laravel)
+                    for file in .claude-agents/agents/laravel/*.md; do
+                      [[ -f "$file" ]] || continue
+                      echo "--- FILE: $file ---"
+                      cat "$file"
+                      echo
+                    done
+                    ;;
+                  nextjs)
+                    for file in .claude-agents/agents/nextjs/*.md; do
+                      [[ -f "$file" ]] || continue
+                      echo "--- FILE: $file ---"
+                      cat "$file"
+                      echo
+                    done
+                    ;;
+                  reactnative|expo)
+                    for file in .claude-agents/agents/mobile/*.md; do
+                      [[ -f "$file" ]] || continue
+                      echo "--- FILE: $file ---"
+                      cat "$file"
+                      echo
+                    done
+                    ;;
+                esac
+              done < .claude-agents/config/stacks.txt
+            fi
+
+            if [[ "${GITHUB_EVENT_NAME}" == "issues" ]]; then
+              echo "Task type: assigned issue implementation"
+              echo "Issue title: ${ISSUE_TITLE}"
+              echo "Issue body:"
+              printf '%s\n' "${ISSUE_BODY}"
+              echo
+              echo "Implement the requested change when feasible, update or add tests when appropriate, and report blockers clearly."
+            else
+              echo "Task type: pull request review request"
+              echo "PR title: ${PR_TITLE}"
+              echo "PR body:"
+              printf '%s\n' "${PR_BODY}"
+              echo
+              echo "Review the PR for correctness, regressions, security, and missing tests. If there is a small safe improvement you can implement directly, do it."
+            fi
+          } > "$prompt_file"
+
+          {
+            echo "prompt<<EOF"
+            cat "$prompt_file"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude
+        if: steps.gate.outputs.should_run == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: ${{ steps.build_prompt.outputs.prompt }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: |
+            --max-turns 12
